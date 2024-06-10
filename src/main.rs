@@ -1,3 +1,4 @@
+#![allow(unused)]
 use std::io::{stdout, Write};
 
 use crossterm::{
@@ -143,7 +144,7 @@ impl<'a> Renderer<'a> {
     }
 
     fn global_position_of(&self, point: &Vector2<f32>) -> Vector2<f32> {
-        Vector2(self.position.0 + point.0, self.position.1 + point.1)
+        Vector2(self.position.0 + point.0, self.position.1 - point.1)
     }
 
     fn lines(&self) -> Vec<String> {
@@ -206,11 +207,9 @@ fn main() -> std::io::Result<()> {
         viewport_height: 24,
     });
 
-    renderer.walk(Direction::Left, 10.0);
-
     let circle = Circle {
         radius: 10.0,
-        position: Vector2(2.0, 2.0),
+        position: Vector2(7.0, 3.0),
     };
     renderer.add_drawable(&circle);
 
