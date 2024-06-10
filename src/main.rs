@@ -1,10 +1,14 @@
-#![allow(unused)]
-use std::io::{stdout, Write};
+use std::{
+    io::{stdout, Write},
+    time::Duration,
+};
 
 use crossterm::{
-    queue,
+    cursor::{MoveTo, MoveToNextLine},
+    event::{self, Event, KeyCode},
+    execute, queue,
     style::Print,
-    terminal::{Clear, ClearType},
+    terminal::{disable_raw_mode, enable_raw_mode, size, Clear, ClearType},
 };
 
 use ascii_renderer::vector2::Vector2;
@@ -79,7 +83,7 @@ struct RendererOptions {
 impl<'a> Renderer<'a> {
     fn new(options: RendererOptions) -> Self {
         Self {
-            buffer: vec!['-'; options.viewport_width * options.viewport_height],
+            buffer: vec![' '; options.viewport_width * options.viewport_height],
             position: Vector2(0.0, 0.0),
             drawables: Vec::new(),
             options,
@@ -168,6 +172,10 @@ impl<'a> Renderer<'a> {
     }
 
     fn render(&mut self) {
+        // Clear buffer
+        self.buffer.fill(' ');
+
+        // Render content
         for point in self.local_pixels() {
             for shape in self.drawables.iter() {
                 let global_pos = self.global_position_of(&point);
@@ -179,7 +187,8 @@ impl<'a> Renderer<'a> {
         }
     }
 
-    fn draw(&self) -> std::io::Result<()> {
+    #[allow(unused)]
+    fn draw_standard_terminal(&self) -> std::io::Result<()> {
         let mut stdout = stdout();
 
         queue!(stdout, Clear(ClearType::All))?;
@@ -199,12 +208,34 @@ impl<'a> Renderer<'a> {
 
         Ok(())
     }
+
+    fn draw(&self) -> std::io::Result<()> {
+        let mut stdout = stdout();
+
+        execute!(stdout, Clear(ClearType::All))?;
+        execute!(stdout, MoveTo(0, 0))?;
+
+        for line in self.lines() {
+            let mut out = String::with_capacity(self.options.viewport_width * 2);
+
+            for c in line.chars() {
+                out.push(c);
+                out.push(' ');
+            }
+
+            execute!(stdout, Print(out), MoveToNextLine(1))?;
+        }
+
+        Ok(())
+    }
 }
 
 fn main() -> std::io::Result<()> {
+    let size = size()?;
+
     let mut renderer = Renderer::new(RendererOptions {
-        viewport_width: 36,
-        viewport_height: 24,
+        viewport_width: size.1 as usize,
+        viewport_height: size.0 as usize - 8, // Leave room for output text
     });
 
     let circle = Circle {
@@ -213,12 +244,32 @@ fn main() -> std::io::Result<()> {
     };
     renderer.add_drawable(&circle);
 
-    renderer.render();
+    enable_raw_mode()?;
 
-    if let Err(err) = renderer.draw() {
-        println!("Failed to write to buffer: {}", err.to_string());
+    renderer.render();
+    renderer.draw()?;
+
+    'main: loop {
+        if event::poll(Duration::from_millis(100))? {
+            if let Event::Key(key_event) = event::read()? {
+                match key_event.code {
+                    KeyCode::Char(c) => match c {
+                        'q' => break 'main,
+                        _ => (),
+                    },
+                    KeyCode::Up => renderer.walk(Direction::Up, 1.0),
+                    KeyCode::Down => renderer.walk(Direction::Down, 1.0),
+                    KeyCode::Left => renderer.walk(Direction::Left, 1.0),
+                    KeyCode::Right => renderer.walk(Direction::Right, 1.0),
+                    _ => (),
+                }
+            }
+            renderer.render();
+            renderer.draw()?;
+        }
     }
-    println!("Position: {:?}", renderer.position);
+
+    disable_raw_mode()?;
 
     Ok(())
 }
