@@ -18,25 +18,6 @@ trait Drawable {
 }
 
 #[derive(Debug, Clone)]
-enum Direction {
-    Up,
-    Down,
-    Left,
-    Right,
-}
-
-impl Direction {
-    fn as_vector_f32(&self) -> Vector2<f32> {
-        match self {
-            Direction::Up => Vector2(0.0, 1.0),
-            Direction::Down => Vector2(0.0, -1.0),
-            Direction::Left => Vector2(-1.0, 0.0),
-            Direction::Right => Vector2(1.0, 0.0),
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
 struct Rect {
     position: Vector2<f32>,
     width: f32,
@@ -80,6 +61,7 @@ struct RendererOptions {
     viewport_height: usize,
 }
 
+#[allow(unused)]
 impl<'a> Renderer<'a> {
     fn new(options: RendererOptions) -> Self {
         Self {
@@ -102,8 +84,8 @@ impl<'a> Renderer<'a> {
         }
     }
 
-    fn walk(&mut self, direction: Direction, distance: f32) {
-        self.position += direction.as_vector_f32() * distance;
+    fn walk(&mut self, direction: Vector2<f32>, distance: f32) {
+        self.position += direction * distance;
     }
 
     fn add_drawable<T: Drawable>(&mut self, drawable: &'a T) {
@@ -124,8 +106,8 @@ impl<'a> Renderer<'a> {
     }
 
     fn global_pixels(&self) -> Vec<Vector2<f32>> {
-        let start_x = self.position.0;
-        let start_y = self.position.1;
+        let start_x = self.position.0 - (self.options.viewport_width / 2) as f32;
+        let start_y = self.position.1 - (self.options.viewport_height / 2) as f32;
         let max_x = start_x + self.options.viewport_width as f32;
         let max_y = start_y + self.options.viewport_height as f32;
 
@@ -187,7 +169,6 @@ impl<'a> Renderer<'a> {
         }
     }
 
-    #[allow(unused)]
     fn draw_standard_terminal(&self) -> std::io::Result<()> {
         let mut stdout = stdout();
 
@@ -243,7 +224,7 @@ fn main() -> std::io::Result<()> {
 
     let circle = Circle {
         radius: 10.0,
-        position: Vector2(7.0, 3.0),
+        position: Vector2::<f32>::ZERO,
     };
     renderer.add_drawable(&circle);
 
@@ -260,10 +241,10 @@ fn main() -> std::io::Result<()> {
                         'q' => break 'main,
                         _ => (),
                     },
-                    KeyCode::Up => renderer.walk(Direction::Up, 1.0),
-                    KeyCode::Down => renderer.walk(Direction::Down, 1.0),
-                    KeyCode::Left => renderer.walk(Direction::Left, 1.0),
-                    KeyCode::Right => renderer.walk(Direction::Right, 1.0),
+                    KeyCode::Up => renderer.walk(Vector2::<f32>::UP, 1.0),
+                    KeyCode::Down => renderer.walk(Vector2::<f32>::DOWN, 1.0),
+                    KeyCode::Left => renderer.walk(Vector2::<f32>::LEFT, 1.0),
+                    KeyCode::Right => renderer.walk(Vector2::<f32>::RIGHT, 1.0),
                     _ => (),
                 }
             }
