@@ -216,9 +216,12 @@ impl<'a> Renderer<'a> {
         execute!(stdout, MoveTo(0, 0))?;
 
         for line in self.lines() {
-            let mut out = String::with_capacity(self.options.viewport_width * 2);
+            let mut out = String::with_capacity(self.options.viewport_width);
 
             for c in line.chars() {
+                if out.len() + 2 > out.capacity() {
+                    break;
+                }
                 out.push(c);
                 out.push(' ');
             }
@@ -234,8 +237,8 @@ fn main() -> std::io::Result<()> {
     let size = size()?;
 
     let mut renderer = Renderer::new(RendererOptions {
-        viewport_width: size.1 as usize,
-        viewport_height: size.0 as usize - 8, // Leave room for output text
+        viewport_width: size.0 as usize,
+        viewport_height: size.1 as usize,
     });
 
     let circle = Circle {
