@@ -23,11 +23,27 @@ enum Direction {
 impl Direction {
     fn as_vector_f32(&self) -> Vector2<f32> {
         match self {
-            Direction::Up => Vector2(1.0, 0.0),
-            Direction::Down => Vector2(-1.0, 0.0),
-            Direction::Left => Vector2(0.0, -1.0),
-            Direction::Right => Vector2(0.0, 1.0),
+            Direction::Up => Vector2(0.0, 1.0),
+            Direction::Down => Vector2(0.0, -1.0),
+            Direction::Left => Vector2(-1.0, 0.0),
+            Direction::Right => Vector2(1.0, 0.0),
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct Rect {
+    position: Vector2<f32>,
+    width: f32,
+    height: f32,
+}
+
+impl Drawable for Rect {
+    fn point_in_self(&self, point: &Vector2<f32>) -> bool {
+        let max_x = self.position.0 + self.width as f32;
+        let max_y = self.position.1 + self.height as f32;
+
+        (self.position.0..max_x).contains(&point.0) && (self.position.1..max_y).contains(&point.1)
     }
 }
 
@@ -47,11 +63,11 @@ impl Drawable for Circle {
     }
 }
 
-struct Renderer {
+struct Renderer<'a> {
     options: RendererOptions,
     position: Vector2<f32>,
     buffer: Vec<char>,
-    drawables: Vec<Box<dyn Drawable>>,
+    drawables: Vec<&'a dyn Drawable>,
 }
 
 struct RendererOptions {
@@ -59,7 +75,7 @@ struct RendererOptions {
     viewport_height: usize,
 }
 
-impl Renderer {
+impl<'a> Renderer<'a> {
     fn new(options: RendererOptions) -> Self {
         Self {
             buffer: vec!['-'; options.viewport_width * options.viewport_height],
@@ -69,15 +85,27 @@ impl Renderer {
         }
     }
 
+    fn bbox(&self) -> Rect {
+        Rect {
+            position: self.position.clone()
+                - Vector2(
+                    (self.options.viewport_width / 2) as f32,
+                    (self.options.viewport_height / 2) as f32,
+                ),
+            width: self.options.viewport_width as f32,
+            height: self.options.viewport_height as f32,
+        }
+    }
+
     fn walk(&mut self, direction: Direction, distance: f32) {
         self.position += direction.as_vector_f32() * distance;
     }
 
-    fn add_drawable<T: Drawable + 'static>(&mut self, drawable: T) {
-        self.drawables.push(Box::new(drawable));
+    fn add_drawable<T: Drawable>(&mut self, drawable: &'a T) {
+        self.drawables.push(drawable);
     }
 
-    fn pixels(&self) -> Vec<Vector2<f32>> {
+    fn local_pixels(&self) -> Vec<Vector2<f32>> {
         let mut pixels =
             Vec::with_capacity(self.options.viewport_width * self.options.viewport_height);
 
@@ -88,6 +116,34 @@ impl Renderer {
         }
 
         pixels
+    }
+
+    fn global_pixels(&self) -> Vec<Vector2<f32>> {
+        let start_x = self.position.0;
+        let start_y = self.position.1;
+        let max_x = start_x + self.options.viewport_width as f32;
+        let max_y = start_y + self.options.viewport_height as f32;
+
+        let mut pixels =
+            Vec::with_capacity(self.options.viewport_width * self.options.viewport_height);
+
+        let mut x = start_x;
+        let mut y;
+
+        while x <= max_x {
+            y = start_y;
+            while y <= max_y {
+                pixels.push(Vector2(x, y));
+                y += 1.0;
+            }
+            x += 1.0;
+        }
+
+        pixels
+    }
+
+    fn global_position_of(&self, point: &Vector2<f32>) -> Vector2<f32> {
+        Vector2(self.position.0 + point.0, self.position.1 + point.1)
     }
 
     fn lines(&self) -> Vec<String> {
@@ -111,19 +167,13 @@ impl Renderer {
     }
 
     fn render(&mut self) {
-        for point in self.pixels() {
+        for point in self.local_pixels() {
             for shape in self.drawables.iter() {
-                if shape.point_in_self(&point) {
-                    println!("Writing 1 hash at {point:?}");
+                let global_pos = self.global_position_of(&point);
+                if shape.point_in_self(&global_pos) {
                     let index = self.index_f32(&point);
                     self.buffer[index] = '#';
                 }
-            }
-        }
-
-        for point in self.pixels() {
-            if self.buffer[self.index_f32(&point)] == '#' {
-                println!("Hash found at {point:?}");
             }
         }
     }
@@ -150,20 +200,26 @@ impl Renderer {
     }
 }
 
-fn main() {
+fn main() -> std::io::Result<()> {
     let mut renderer = Renderer::new(RendererOptions {
-        viewport_width: 32,
-        viewport_height: 18,
+        viewport_width: 36,
+        viewport_height: 24,
     });
 
-    renderer.add_drawable(Circle {
+    renderer.walk(Direction::Left, 10.0);
+
+    let circle = Circle {
         radius: 10.0,
-        position: Vector2(0.0, 0.0),
-    });
+        position: Vector2(2.0, 2.0),
+    };
+    renderer.add_drawable(&circle);
 
     renderer.render();
 
     if let Err(err) = renderer.draw() {
         println!("Failed to write to buffer: {}", err.to_string());
     }
+    println!("Position: {:?}", renderer.position);
+
+    Ok(())
 }
